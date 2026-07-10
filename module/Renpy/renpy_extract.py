@@ -36,7 +36,6 @@ RE_RELAXED_ENGLISH_SOURCE_LINE = re.compile(
     re.IGNORECASE,
 )
 RE_RELAXED_DOUBLE_QUOTED = re.compile(r'"((?:\\.|[^"\\])*)"')
-RE_RELAXED_SINGLE_QUOTED = re.compile(r"'((?:\\.|[^'\\])*)'")
 RE_RELAXED_ENGLISH_WORD = re.compile(r'\b[A-Za-z]{3,}\b')
 RE_RELAXED_FUNCTION_CALL_PREFIX = re.compile(r'[A-Za-z_][A-Za-z0-9_\.]*\($')
 # ============================================
@@ -112,6 +111,77 @@ def is_ui_keyword(text: str) -> bool:
     return text.strip().lower() in UI_KEYWORDS
 
 
+def iter_relaxed_single_quoted_literals(line_content: str):
+    """Yield standalone single-quoted literals outside double-quoted text."""
+    control_match = re.match(r'^\s*(?:if|elif|while)\b.*:\s*(.*)$', line_content)
+    if control_match:
+        scan_line = control_match.group(1)
+        if not scan_line or scan_line.lstrip().startswith('#'):
+            return
+    else:
+        scan_line = line_content
+
+    def is_escaped(index: int) -> bool:
+        backslashes = 0
+        cursor = index - 1
+        while cursor >= 0 and scan_line[cursor] == '\\':
+            backslashes += 1
+            cursor -= 1
+        return backslashes % 2 == 1
+
+    def is_word_apostrophe(index: int) -> bool:
+        prev_char = scan_line[index - 1] if index > 0 else ''
+        next_char = scan_line[index + 1] if index + 1 < len(scan_line) else ''
+        return prev_char.isalpha() and next_char.isalpha()
+
+    def is_valid_single_quote_start(index: int) -> bool:
+        if is_word_apostrophe(index):
+            return False
+        prev_char = scan_line[index - 1] if index > 0 else ''
+        next_char = scan_line[index + 1] if index + 1 < len(scan_line) else ''
+        if not next_char or next_char.isspace() or next_char in ",:)]}":
+            return False
+        if prev_char.isalnum() or prev_char in "_)]}\"":
+            return False
+        return True
+
+    def is_valid_single_quote_end(index: int) -> bool:
+        if is_word_apostrophe(index):
+            return False
+        prev_char = scan_line[index - 1] if index > 0 else ''
+        next_char = scan_line[index + 1] if index + 1 < len(scan_line) else ''
+        if not prev_char or prev_char.isspace() or prev_char in "([{,:":
+            return False
+        if next_char.isalnum() or next_char == '_':
+            return False
+        return True
+
+    in_double_quote = False
+    index = 0
+    while index < len(scan_line):
+        char = scan_line[index]
+        if char == '\\' and not is_escaped(index):
+            index += 2
+            continue
+        if char == '"' and not is_escaped(index):
+            in_double_quote = not in_double_quote
+            index += 1
+            continue
+        if char == "'" and not in_double_quote and not is_escaped(index) and is_valid_single_quote_start(index):
+            end_index = index + 1
+            while end_index < len(scan_line):
+                end_char = scan_line[end_index]
+                if end_char == '\\' and not is_escaped(end_index):
+                    end_index += 2
+                    continue
+                if end_char == "'" and not is_escaped(end_index) and is_valid_single_quote_end(end_index):
+                    yield scan_line[index + 1:end_index]
+                    index = end_index
+                    break
+                end_index += 1
+        index += 1
+
+
 def extract_relaxed_english_line_literals(line_content: str, filter_length: int) -> set[str]:
     """按宽松英文行规则补抓引号文本。
 
@@ -127,36 +197,43 @@ def extract_relaxed_english_line_literals(line_content: str, filter_length: int)
         return set()
 
     result = set()
-    for pattern in (RE_RELAXED_DOUBLE_QUOTED, RE_RELAXED_SINGLE_QUOTED):
-        for match in pattern.finditer(line_content):
-            prefix = line_content[:match.start()].rstrip()
-            # 宽松补抓不处理明显的函数参数字符串，避免误提取菜单 ID 等内部标识。
-            if RE_RELAXED_FUNCTION_CALL_PREFIX.search(prefix):
-                continue
-            text = replace_unescaped_quotes(match.group(1))
-            text = text.replace("\\'", "'")
-            candidate = text.strip()
-            if not candidate:
-                continue
-            if RE_RELAXED_ENGLISH_WORD.search(candidate) is None:
-                continue
 
-            cmp_text = candidate.lower()
-            if is_path_or_dir_string(cmp_text) or is_resource_filename(cmp_text):
-                continue
-            if should_skip_text(candidate):
-                continue
-            if re.search(r'\[\s*\w+\.\w+.*?\]', candidate):
-                continue
+    def maybe_add_candidate(text: str):
+        candidate = text.strip()
+        if not candidate:
+            return
+        if RE_RELAXED_ENGLISH_WORD.search(candidate) is None:
+            return
 
-            effective_filter_length = filter_length
-            if contains_cjk(candidate):
-                effective_filter_length = max(2, filter_length // 3)
-            if not is_ui_keyword(candidate):
-                if len(replace_all_blank(candidate)) < effective_filter_length:
-                    continue
+        cmp_text = candidate.lower()
+        if is_path_or_dir_string(cmp_text) or is_resource_filename(cmp_text):
+            return
+        if should_skip_text(candidate):
+            return
+        if re.search(r'\[\s*\w+\.\w+.*?\]', candidate):
+            return
 
-            result.add(text)
+        effective_filter_length = filter_length
+        if contains_cjk(candidate):
+            effective_filter_length = max(2, filter_length // 3)
+        if not is_ui_keyword(candidate):
+            if len(replace_all_blank(candidate)) < effective_filter_length:
+                return
+
+        result.add(text)
+
+    for match in RE_RELAXED_DOUBLE_QUOTED.finditer(line_content):
+        prefix = line_content[:match.start()].rstrip()
+        if RE_RELAXED_FUNCTION_CALL_PREFIX.search(prefix):
+            continue
+        text = replace_unescaped_quotes(match.group(1))
+        text = text.replace("\\'", "'")
+        maybe_add_candidate(text)
+
+    for text in iter_relaxed_single_quoted_literals(line_content):
+        text = replace_unescaped_quotes(text)
+        text = text.replace("\\'", "'")
+        maybe_add_candidate(text)
 
     return result
 
