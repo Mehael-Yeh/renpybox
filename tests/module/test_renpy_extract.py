@@ -41,24 +41,24 @@ def test_extract_from_file_ignores_contraction_apostrophes_inside_double_quotes(
 
 
 def test_extract_from_file_keeps_double_quoted_dialogue_with_nested_single_quotes(tmp_path):
-    content = '''erik "I've got thirty seconds to fill up all her holes and max her 'o-power' gauge."
+    content = '''narrator "I've got one minute to top off the reactor and prime the 'luma-drive' core."
 '''
 
     result = extract_from_text(tmp_path, content, filter_length=4)
 
-    assert "I've got thirty seconds to fill up all her holes and max her 'o-power' gauge." in result
-    assert "ve got thirty seconds to fill up all her holes and max her " not in result
-    assert "o-power" not in result
+    assert "I've got one minute to top off the reactor and prime the 'luma-drive' core." in result
+    assert "ve got one minute to top off the reactor and prime the " not in result
+    assert "luma-drive" not in result
 
 
 def test_extract_from_file_keeps_double_quoted_dialogue_with_contractions(tmp_path):
-    content = '''erik "Oh, baby... it's a triple play!"
+    content = '''narrator "Well, it's a clean sweep!"
 '''
 
     result = extract_from_text(tmp_path, content, filter_length=4)
 
-    assert "Oh, baby... it's a triple play!" in result
-    assert "s a triple play!" not in result
+    assert "Well, it's a clean sweep!" in result
+    assert "s a clean sweep!" not in result
 
 
 def test_extract_from_file_ignores_single_quoted_control_conditions(tmp_path):
