@@ -1,4 +1,7 @@
 from module.Renpy.renpy_extract import ExtractFromFile
+from module.Extract.ReplaceGenerator import _extract_relaxed_english_line_literals
+from module.Extract.UnifiedExtractor import UnifiedExtractor
+import types
 
 
 def extract_from_text(tmp_path, content: str, filter_length: int = 20) -> set[str]:
@@ -97,3 +100,31 @@ def test_extract_from_file_keeps_single_quoted_display_text_outside_double_quote
     result = extract_from_text(tmp_path, content, filter_length=4)
 
     assert "Single quoted display text" in result
+
+
+
+def test_replace_text_relaxed_scan_ignores_apostrophes_in_dialogue():
+    line = 'speaker "I\'ve got forty seconds to refill the engine and prime her \'aux-drive\' gauge."'
+
+    result = _extract_relaxed_english_line_literals(line)
+
+    assert "I've got forty seconds to refill the engine and prime her 'aux-drive' gauge." in result
+    assert 've got forty seconds to refill the engine and prime her ' not in result
+    assert 'aux-drive' not in result
+    assert _extract_relaxed_english_line_literals("show text 'Standalone display text'") == {"Standalone display text"}
+
+
+def test_incremental_coverage_ignores_translate_block_comments(tmp_path):
+    translation_file = tmp_path / "dialogue.rpy"
+    translation_file.write_text(
+        'translate chinese scene_demo:\n'
+        '    # narrator "I won\'t decline."\n'
+        '    narrator "Already translated"\n',
+        encoding="utf-8",
+    )
+    extractor = UnifiedExtractor.__new__(UnifiedExtractor)
+    extractor.logger = types.SimpleNamespace(debug=lambda *args, **kwargs: None)
+
+    covered = extractor._get_all_originals(tmp_path)
+
+    assert "I won't decline." not in covered

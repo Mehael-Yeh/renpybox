@@ -267,32 +267,75 @@ def _strip_format_tags(text: str) -> str:
 
 
 def _extract_relaxed_english_line_literals(line: str) -> Set[str]:
-    """补抓宽松英文行里的引号文本。
-
-    说明：
-    - 对应用户提供的规则：`^(?!.*#)^(?!.*translate schinese)(?=.*\\b[A-Za-z]{3,}\\b).*$`
-    - 这里将 `translate schinese` 泛化为 `translate <lang>`，避免只对某个语言标签生效
-    - 命中后只提取引号里的文本，不把整行代码直接当作待翻译文本
-    """
+    """补抓宽松英文行的引号文本，避免把缩写单引号当作字符串边界。"""
     stripped = line.strip()
-    if not stripped:
-        return set()
-    if RE_RELAXED_ENGLISH_SOURCE_LINE.match(stripped) is None:
+    if not stripped or RE_RELAXED_ENGLISH_SOURCE_LINE.match(stripped) is None:
         return set()
 
     result: Set[str] = set()
-    for pattern in (RE_RELAXED_DOUBLE_QUOTED, RE_RELAXED_SINGLE_QUOTED):
-        for match in pattern.finditer(line):
-            prefix = line[:match.start()].rstrip()
-            # 宽松补抓不处理明显的函数参数字符串，避免把 ShowMenu("gallery") 之类带进来。
-            if RE_RELAXED_FUNCTION_CALL_PREFIX.search(prefix):
-                continue
-            text = _unescape(match.group(1))
-            if not text:
-                continue
-            if RE_RELAXED_ENGLISH_WORD.search(text) is None:
-                continue
+
+    def add_candidate(text: str) -> None:
+        text = _unescape(text)
+        if text and RE_RELAXED_ENGLISH_WORD.search(text) is not None:
             result.add(text)
+
+    for match in RE_RELAXED_DOUBLE_QUOTED.finditer(line):
+        prefix = line[:match.start()].rstrip()
+        if not RE_RELAXED_FUNCTION_CALL_PREFIX.search(prefix):
+            add_candidate(match.group(1))
+
+    # 双引号内的单引号通常是缩写或嵌套引号，不能参与单引号文本配对。
+    in_double_quote = False
+    index = 0
+    while index < len(line):
+        char = line[index]
+        if char == chr(92):
+            index += 2
+            continue
+        if char == '"':
+            in_double_quote = not in_double_quote
+            index += 1
+            continue
+        if char != "'" or in_double_quote:
+            index += 1
+            continue
+
+        previous = line[index - 1] if index else ''
+        following = line[index + 1] if index + 1 < len(line) else ''
+        prefix = line[:index].rstrip()
+        if (
+            not following
+            or following.isspace()
+            or following in ',:)]}'
+            or previous.isalnum()
+            or previous in '_)]}"'
+            or (previous.isalpha() and following.isalpha())
+            or RE_RELAXED_FUNCTION_CALL_PREFIX.search(prefix)
+        ):
+            index += 1
+            continue
+
+        end_index = index + 1
+        while end_index < len(line):
+            end_char = line[end_index]
+            if end_char == chr(92):
+                end_index += 2
+                continue
+            if end_char == chr(39):
+                before_end = line[end_index - 1]
+                after_end = line[end_index + 1] if end_index + 1 < len(line) else ''
+                if (
+                    not before_end.isspace()
+                    and before_end not in '([{,:'
+                    and not (before_end.isalpha() and after_end.isalpha())
+                    and not after_end.isalnum()
+                    and after_end != '_'
+                ):
+                    add_candidate(line[index + 1:end_index])
+                    index = end_index
+                    break
+            end_index += 1
+        index += 1
 
     return result
 

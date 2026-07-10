@@ -1169,12 +1169,9 @@ class UnifiedExtractor:
             # 2. 获取当前所有原文（用于后续对比新增）
             existing_originals = set(existing_translations.keys())
             all_current_originals = self._get_all_originals(tl_dir)
-            block_originals = self._collect_block_originals(tl_dir)
-            if block_originals:
-                all_current_originals |= block_originals
-                self.logger.info(f"翻译块原文 {len(block_originals)} 条已计入已存在集合")
-            self.logger.info(f"当前共 {len(all_current_originals)} 条原文")
-            
+            # 翻译块注释不等于 strings 覆盖，不能跨文件压制同文菜单项。
+            self.logger.info(f"当前共 {len(all_current_originals)} 条 strings 原文")
+
             # 3. 创建临时目录进行抽取
             temp_extract_dir = game_dir / f"_temp_extract_{tl_name}_{int(time.time())}"
             temp_tl_dir = temp_extract_dir / "game" / "tl" / tl_name
@@ -1254,8 +1251,6 @@ class UnifiedExtractor:
                 if output_to_separate_folder and getattr(config, "renpy_incremental_include_untranslated", False):
                     # tl 已存在但没翻译过/只有占位（new==old/new==""）时，把这些也纳入待翻译包
                     pending_originals = self._get_untranslated_originals(tl_dir)
-                    if block_originals:
-                        pending_originals -= block_originals
                     pending_originals -= set(existing_translations.keys())
                     self.logger.info(f"检测到 {len(pending_originals)} 条未翻译占位原文")
 
@@ -1527,30 +1522,19 @@ class UnifiedExtractor:
         return result
 
     def _get_all_originals(self, tl_dir: Path) -> Set[str]:
-        """获取 tl 目录中所有的原文"""
-        originals = set()
+        """获取 translate strings 中真实 old 条目的原文。"""
+        originals: Set[str] = set()
         if not tl_dir.exists():
             return originals
 
-        extractor = RenpyTlItemExtractor()
         for rpy_file in self._iter_rpy_files(tl_dir):
-            try:
-                content = rpy_file.read_text(encoding="utf-8", errors="replace")
-                doc = parse_tl_document(content.splitlines())
-                items = extractor.extract(doc, str(rpy_file))
-                for item in items:
-                    originals.add(item.get_src())
-                continue
-            except Exception:
-                pass
-
             try:
                 content = rpy_file.read_text(encoding="utf-8", errors="replace")
                 for match in self.OLD_LINE_RE.finditer(content):
                     old_text = match.group("text").replace('\\"', '"').replace("\\'", "'")
                     originals.add(old_text)
             except Exception:
-                pass
+                continue
         return originals
 
     def _get_untranslated_originals(self, tl_dir: Path) -> Set[str]:
