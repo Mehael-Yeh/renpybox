@@ -267,9 +267,18 @@ def _strip_format_tags(text: str) -> str:
 
 
 def _extract_relaxed_english_line_literals(line: str) -> Set[str]:
-    """补抓宽松英文行的引号文本，避免把缩写单引号当作字符串边界。"""
+    """补抓宽松英文行里的引号文本?
+
+    说明?
+    - 对应用户提供的规则?`^(?!.*#)^(?!.*translate schinese)(?=.*\\b[A-Za-z]{3,}\\b).*$`
+    - 这里将 `translate schinese` 泛化为 `translate <lang>`?避免只对某个语言标签生效
+    - 命中后只提取引号里的文本，不把整行代码直接当作待翻译文本
+    - 单引号需俄外判断是否处于双引号台词内，避免缩写被误抽取
+    """
     stripped = line.strip()
-    if not stripped or RE_RELAXED_ENGLISH_SOURCE_LINE.match(stripped) is None:
+    if not stripped:
+        return set()
+    if RE_RELAXED_ENGLISH_SOURCE_LINE.match(stripped) is None:
         return set()
 
     result: Set[str] = set()
@@ -281,6 +290,7 @@ def _extract_relaxed_english_line_literals(line: str) -> Set[str]:
 
     for match in RE_RELAXED_DOUBLE_QUOTED.finditer(line):
         prefix = line[:match.start()].rstrip()
+        # 宽松补抓不处理明显的函数参数字符串，避免把 ShowMenu("gallery") 之类带进来。
         if not RE_RELAXED_FUNCTION_CALL_PREFIX.search(prefix):
             add_candidate(match.group(1))
 
@@ -289,6 +299,7 @@ def _extract_relaxed_english_line_literals(line: str) -> Set[str]:
     index = 0
     while index < len(line):
         char = line[index]
+        # 跳过转义字符，避免转义引号改变扫描状态。
         if char == chr(92):
             index += 2
             continue
@@ -303,6 +314,7 @@ def _extract_relaxed_english_line_literals(line: str) -> Set[str]:
         previous = line[index - 1] if index else ''
         following = line[index + 1] if index + 1 < len(line) else ''
         prefix = line[:index].rstrip()
+        # 单词内的撤号、空引号和函数参数都不能作为单引号文本的起点。
         if (
             not following
             or following.isspace()
