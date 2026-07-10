@@ -61,6 +61,19 @@ def test_extract_from_file_keeps_double_quoted_dialogue_with_contractions(tmp_pa
     assert "s a clean sweep!" not in result
 
 
+def test_extract_from_file_keeps_menu_text_with_contraction_and_single_quoted_suffix(tmp_path):
+    content = '''menu:
+    "I won't decline."(_route='accept'):
+        jump accept_route
+'''
+
+    result = extract_from_text(tmp_path, content, filter_length=4)
+
+    assert "I won't decline." in result
+    assert "accept" not in result
+    assert "t decline.\"(_route=" not in result
+
+
 def test_extract_from_file_ignores_single_quoted_control_conditions(tmp_path):
     content = '''if state == 'start':
     pass
