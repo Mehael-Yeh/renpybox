@@ -112,7 +112,8 @@ def is_ui_keyword(text: str) -> bool:
 
 
 def iter_relaxed_single_quoted_literals(line_content: str):
-    """Yield standalone single-quoted literals outside double-quoted text."""
+    """遍历双引号外、可独立成立的单引号文本。"""
+    # 条件表达式中的字符串用于逻辑判断，不能作为待翻译文本补抓。
     control_match = re.match(r'^\s*(?:if|elif|while)\b.*:\s*(.*)$', line_content)
     if control_match:
         scan_line = control_match.group(1)
@@ -167,6 +168,7 @@ def iter_relaxed_single_quoted_literals(line_content: str):
             in_double_quote = not in_double_quote
             index += 1
             continue
+        # 双引号内的单引号通常是缩写或嵌套引号，不能与行尾参数中的单引号配对。
         if char == "'" and not in_double_quote and not is_escaped(index) and is_valid_single_quote_start(index):
             end_index = index + 1
             while end_index < len(scan_line):
