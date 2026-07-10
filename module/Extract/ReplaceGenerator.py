@@ -31,7 +31,7 @@ LEGACY_MISS_TXT = "miss_ready_replace.txt"
 MISS_DIR = "miss"
 REGEX_CACHE = "regex_extracted.json"  # 正则提取缓存
 HOOK_MANIFEST = "hook_translate_manifest.json"
-REGEX_CACHE_VERSION = 1
+REGEX_CACHE_VERSION = 2  # 宽松引号扫描规则已修正，必须作废旧候选缓存。
 RE_RELAXED_ENGLISH_SOURCE_LINE = re.compile(
     r'^(?!.*#)(?!\s*translate\s+\w+\b)(?=.*\b[A-Za-z]{3,}\b).*$',
     re.IGNORECASE,

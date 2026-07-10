@@ -1,5 +1,8 @@
 from module.Renpy.renpy_extract import ExtractFromFile
-from module.Extract.ReplaceGenerator import _extract_relaxed_english_line_literals
+from module.Extract.ReplaceGenerator import (
+    _extract_relaxed_english_line_literals,
+    _try_load_regex_cache,
+)
 from module.Extract.UnifiedExtractor import UnifiedExtractor
 import types
 
@@ -128,3 +131,13 @@ def test_incremental_coverage_ignores_translate_block_comments(tmp_path):
     covered = extractor._get_all_originals(tmp_path)
 
     assert "I won't decline." not in covered
+
+
+def test_replace_text_rebuilds_outdated_regex_cache(tmp_path):
+    cache_path = tmp_path / "regex_extracted.json"
+    cache_path.write_text(
+        '{"version": 1, "file_count": 1, "max_mtime_ns": 1, "strings": ["stale fragment"]}',
+        encoding="utf-8",
+    )
+
+    assert _try_load_regex_cache(cache_path, file_count=1, max_mtime_ns=1) is None
