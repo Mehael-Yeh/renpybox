@@ -1502,7 +1502,9 @@ class UnifiedExtractor:
                 removed = self._remove_string_duplicates_with_blocks(tl_dir)
                 if removed:
                     self.logger.info(f"已移除 {removed} 条与翻译块重复的 strings 翻译")
-            if getattr(config, "onekey_inject_base_box", False):
+            # base_box 一旦存在就会被 Ren'Py 加载；即使本次未启用注入，
+            # 也要清理它与增量占位条目的重复。
+            if (tl_dir / "base_box").exists():
                 removed_ui = self._remove_placeholder_duplicates_for_base_box(tl_dir, tl_name)
                 if removed_ui:
                     self.logger.info(f"已按 base_box 优先清理占位重复 {removed_ui} 条")
@@ -1513,11 +1515,18 @@ class UnifiedExtractor:
             except Exception:
                 pass
 
+        # 合并与去重成功后，增量目录不再是可加载的翻译来源，
+        # 避免遗留目录造成重复加载和困惑。
+        try:
+            shutil.rmtree(str(incremental_dir))
+        except Exception as exc:
+            self.logger.warning(f"合并完成但清理增量目录失败 {incremental_dir}: {exc}")
+
         result.success = True
         result.total_files = len(list(self._iter_rpy_files(tl_dir)))
         result.message = (
             f"合并完成：更新占位 {updated_entries} 条，"
-            f"新增 {added_entries} 条，涉及 {merged_files} 个文件"
+            f"新增 {added_entries} 条，涉及 {merged_files} 个文件；已清理 {incremental_dir.name}"
         )
         return result
 

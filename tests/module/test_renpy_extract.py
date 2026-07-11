@@ -141,3 +141,42 @@ def test_replace_text_rebuilds_outdated_regex_cache(tmp_path):
     )
 
     assert _try_load_regex_cache(cache_path, file_count=1, max_mtime_ns=1) is None
+
+
+def test_incremental_merge_cleans_staging_folder_and_base_box_placeholders(tmp_path):
+    game_dir = tmp_path / "project"
+    tl_dir = game_dir / "game" / "tl" / "chinese"
+    staging_dir = game_dir / "game" / "tl" / "chinese_new"
+    base_box = tl_dir / "base_box"
+    base_box.mkdir(parents=True)
+    staging_dir.mkdir(parents=True)
+
+    (base_box / "screens_box.rpy").write_text(
+        'translate chinese strings:\n\n    old "Back"\n    new "\u8fd4\u56de"\n',
+        encoding="utf-8",
+    )
+    hud = tl_dir / "src" / "gui" / "hud.rpy"
+    hud.parent.mkdir(parents=True)
+    hud.write_text(
+        'translate chinese strings:\n\n    old "Back"\n    new "Back"\n',
+        encoding="utf-8",
+    )
+    staging = staging_dir / "src" / "plot" / "new_text.rpy"
+    staging.parent.mkdir(parents=True)
+    staging.write_text(
+        'translate chinese strings:\n\n    old "New menu text"\n    new "\u65b0\u83dc\u5355\u6587\u672c"\n',
+        encoding="utf-8",
+    )
+
+    extractor = UnifiedExtractor.__new__(UnifiedExtractor)
+    extractor.logger = types.SimpleNamespace(
+        debug=lambda *args, **kwargs: None,
+        info=lambda *args, **kwargs: None,
+        warning=lambda *args, **kwargs: None,
+    )
+    result = extractor.merge_incremental_folder(game_dir, "chinese", staging_dir, clean_duplicates=True)
+
+    assert result.success
+    assert not staging_dir.exists()
+    assert 'old "Back"' not in hud.read_text(encoding="utf-8")
+    assert 'old "New menu text"' in (tl_dir / "src" / "plot" / "new_text.rpy").read_text(encoding="utf-8")
