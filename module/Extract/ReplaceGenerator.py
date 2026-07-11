@@ -282,75 +282,13 @@ def _extract_relaxed_english_line_literals(line: str) -> Set[str]:
     if RE_RELAXED_ENGLISH_SOURCE_LINE.match(stripped) is None:
         return set()
 
-    result: Set[str] = set()
-
-    def add_candidate(text: str) -> None:
-        text = _unescape(text)
-        if text and RE_RELAXED_ENGLISH_WORD.search(text) is not None:
-            result.add(text)
-
-    for match in RE_RELAXED_DOUBLE_QUOTED.finditer(line):
-        prefix = line[:match.start()].rstrip()
-        # 宽松补抓不处理明显的函数参数字符串，避免把 ShowMenu("gallery") 之类带进来。
-        if not RE_RELAXED_FUNCTION_CALL_PREFIX.search(prefix):
-            add_candidate(match.group(1))
-
-    # 双引号内的单引号通常是缩写或嵌套引号，不能参与单引号文本配对。
-    in_double_quote = False
-    index = 0
-    while index < len(line):
-        char = line[index]
-        # 跳过转义字符，避免转义引号改变扫描状态。
-        if char == chr(92):
-            index += 2
-            continue
-        if char == '"':
-            in_double_quote = not in_double_quote
-            index += 1
-            continue
-        if char != "'" or in_double_quote:
-            index += 1
-            continue
-
-        previous = line[index - 1] if index else ''
-        following = line[index + 1] if index + 1 < len(line) else ''
-        prefix = line[:index].rstrip()
-        # 单词内的撤号、空引号和函数参数都不能作为单引号文本的起点。
-        if (
-            not following
-            or following.isspace()
-            or following in ',:)]}'
-            or previous.isalnum()
-            or previous in '_)]}"'
-            or (previous.isalpha() and following.isalpha())
-            or RE_RELAXED_FUNCTION_CALL_PREFIX.search(prefix)
-        ):
-            index += 1
-            continue
-
-        end_index = index + 1
-        while end_index < len(line):
-            end_char = line[end_index]
-            if end_char == chr(92):
-                end_index += 2
-                continue
-            if end_char == chr(39):
-                before_end = line[end_index - 1]
-                after_end = line[end_index + 1] if end_index + 1 < len(line) else ''
-                if (
-                    not before_end.isspace()
-                    and before_end not in '([{,:'
-                    and not (before_end.isalpha() and after_end.isalpha())
-                    and not after_end.isalnum()
-                    and after_end != '_'
-                ):
-                    add_candidate(line[index + 1:end_index])
-                    index = end_index
-                    break
-            end_index += 1
-        index += 1
-
-    return result
+    # 复用标准 Ren'Py 补充抽取器的宽松规则，避免「补全翻译」钩子流程
+    # 与标准/增量 TL 流程对单引号、缩写、行内语句的判断出现分叉。
+    return {
+        _unescape(text)
+        for text in rx.extract_relaxed_english_line_literals(line, filter_length=4)
+        if text and RE_RELAXED_ENGLISH_WORD.search(_unescape(text)) is not None
+    }
 
 
 def _is_character_name(text: str) -> bool:

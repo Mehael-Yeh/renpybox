@@ -226,3 +226,53 @@ def test_static_supplement_uses_first_source_file_for_duplicate_menu_text(tmp_pa
     )
     assert extractor._remove_string_duplicates_with_blocks(tl_dir) == 0
     assert 'old "Continue route."' in first_tl.read_text(encoding="utf-8")
+
+
+def test_replace_text_relaxed_scan_matches_standard_extractor_for_control_lines():
+    assert _extract_relaxed_english_line_literals("if state == 'start':") == set()
+    assert _extract_relaxed_english_line_literals("if ready: 'Inline translatable text'") == {"Inline translatable text"}
+
+
+def test_regular_extract_appends_static_supplement_entries(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    source = project / "game" / "script.rpy"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "label start:\n"
+        "    show text 'Standalone display text'\n",
+        encoding="utf-8",
+    )
+
+    from module.Extract import UnifiedExtractor as ux
+
+    monkeypatch.setattr(
+        ux.Config,
+        "load",
+        lambda self: types.SimpleNamespace(
+            extract_use_official=False,
+            extract_use_custom=True,
+            onekey_inject_base_box=False,
+            renpy_remove_string_duplicates=False,
+            export_structured_json=False,
+            export_trans_json=False,
+        ),
+    )
+    monkeypatch.setattr(rx, "ExtractAllFilesInDir", lambda *args, **kwargs: None)
+
+    extractor = UnifiedExtractor.__new__(UnifiedExtractor)
+    extractor.logger = types.SimpleNamespace(
+        info=lambda *args, **kwargs: None,
+        debug=lambda *args, **kwargs: None,
+        warning=lambda *args, **kwargs: None,
+        error=lambda *args, **kwargs: None,
+    )
+    extractor.renpy_extractor = None
+    extractor._progress_callback = None
+    extractor._last_suspicious_manifest = None
+    extractor._last_suspicious_removed_count = 0
+
+    result = extractor.extract_regular(project, "chinese", use_official=False)
+
+    assert result.success
+    output = project / "game" / "tl" / "chinese" / "script.rpy"
+    assert 'old "Standalone display text"' in output.read_text(encoding="utf-8")

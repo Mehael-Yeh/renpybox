@@ -1087,9 +1087,12 @@ class UnifiedExtractor:
             else:
                 self.logger.info("根据配置跳过补充抽取阶段")
             
-            # 4. 过滤与清理 + 终极结构导出
+            # 4. 静态补充抽取：把官方/自定义流程仍可能漏掉的源码文本写入标准 TL。
+            self._append_static_supplement_entries(game_dir, tl_dir, tl_name)
+
+            # 5. 过滤与清理 + 终极结构导出
             self._post_process(game_dir, tl_name, tl_dir, config, None)
-            # 5. 注入内置 UI 包（common_box/screens_box）
+            # 6. 注入内置 UI 包（common_box/screens_box）
             injected_ui = 0
             if getattr(config, "onekey_inject_base_box", False):
                 injected_ui = self._deploy_builtin_ui_pack(tl_dir, tl_name)
@@ -2157,7 +2160,7 @@ class UnifiedExtractor:
                 self.logger.info(f"已移除 {removed} 条与翻译块重复的 strings 翻译")
             
         # 移除 Hook 及工具型文件
-        if config.extract_skip_hook_files:
+        if getattr(config, "extract_skip_hook_files", False):
             self._prune_hook_files(tl_dir)
 
         # 清理空 translate strings 块，避免后续官方抽取报错
@@ -2186,7 +2189,7 @@ class UnifiedExtractor:
                 pass
 
         # 终极结构导出
-        if config.extract_export_excel:
+        if getattr(config, "extract_export_excel", False):
             if existing_translations is None:
                 existing_translations = self._get_existing_translations(tl_dir)
             try:
