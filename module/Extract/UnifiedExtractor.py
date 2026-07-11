@@ -1600,7 +1600,7 @@ class UnifiedExtractor:
         return added
 
     def _get_all_originals(self, tl_dir: Path) -> Set[str]:
-        """获取 tl 目录中所有的原文?
+        """获取 tl 目录中所有的原文。
 
         仅统计 translate strings 中真实的 old 条目；翻译块注释
         只是原文说明，不可作为全局 strings 覆盖依据。

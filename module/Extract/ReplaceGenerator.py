@@ -268,13 +268,13 @@ def _strip_format_tags(text: str) -> str:
 
 
 def _extract_relaxed_english_line_literals(line: str) -> Set[str]:
-    """补抓宽松英文行里的引号文本?
+    """补抓宽松英文行里的引号文本。
 
-    说明?
-    - 对应用户提供的规则?`^(?!.*#)^(?!.*translate schinese)(?=.*\\b[A-Za-z]{3,}\\b).*$`
-    - 这里将 `translate schinese` 泛化为 `translate <lang>`?避免只对某个语言标签生效
-    - 命中后只提取引号里的文本，不把整行代码直接当作待翻译文本
-    - 单引号需俄外判断是否处于双引号台词内，避免缩写被误抽取
+    说明：
+    - 对应用户提供的规则：`^(?!.*#)^(?!.*translate schinese)(?=.*\\b[A-Za-z]{3,}\\b).*$`
+    - 这里将 `translate schinese` 泛化为 `translate <lang>`，避免只对某个语言标签生效。
+    - 命中后只提取引号里的文本，不把整行代码直接当作待翻译文本。
+    - 单引号需额外判断是否处于双引号台词内，避免缩写被误抽取。
     """
     stripped = line.strip()
     if not stripped:
