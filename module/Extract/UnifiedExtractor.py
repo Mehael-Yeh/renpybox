@@ -1533,7 +1533,7 @@ class UnifiedExtractor:
         return result
 
     def _get_file_block_originals(self, rpy_file: Path) -> Set[str]:
-        """??????????? translate ?????????"""
+        """读取单个翻译文件中普通 translate 块注释记录的原文。"""
         if not rpy_file.exists():
             return set()
         try:
@@ -1580,7 +1580,7 @@ class UnifiedExtractor:
                 continue
 
             target_file = tl_dir / relative_path
-            # ??????????????????????????????????
+            # 仅同源翻译文件中的普通对话可证明已覆盖；其他文件的同文不能遮蔽菜单。
             if original in self._get_file_block_originals(target_file):
                 continue
             target_file.parent.mkdir(parents=True, exist_ok=True)
@@ -2098,9 +2098,9 @@ class UnifiedExtractor:
         return block_originals
 
     def _remove_string_duplicates_with_blocks(self, tl_dir: Path) -> int:
-        """?? strings ???????????????? old ?????"""
+        """保留 strings 条目；普通翻译块注释不能证明全局 old 已被覆盖。"""
         del tl_dir
-        # Ren'Py ??? translate ??????? old ??????????????
+        # Ren'Py 的普通 translate 块使用标签而非 old 键，不能拿注释做跨文件去重。
         return 0
 
     def _backup_tl_dir(self, game_dir: Path, tl_name: str):
