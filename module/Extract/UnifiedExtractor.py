@@ -1239,6 +1239,8 @@ class UnifiedExtractor:
                     _relocate_dir(temp_backup_dir, tl_dir, remove_src=True)
                 
                 # 6. 获取新抽取的所有原文
+                # 静态源码文本必须写入标准 TL，不交给 replace_text。
+                self._append_static_supplement_entries(game_dir, temp_tl_dir, tl_name)
                 new_extracted_originals = self._get_all_originals(temp_tl_dir)
                 self.logger.info(f"新抽取共 {len(new_extracted_originals)} 条原文")
                 
@@ -1529,6 +1531,73 @@ class UnifiedExtractor:
             f"新增 {added_entries} 条，涉及 {merged_files} 个文件；已清理 {incremental_dir.name}"
         )
         return result
+
+    def _get_file_block_originals(self, rpy_file: Path) -> Set[str]:
+        """??????????? translate ?????????"""
+        if not rpy_file.exists():
+            return set()
+        try:
+            lines = rpy_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        except Exception:
+            return set()
+
+        originals: Set[str] = set()
+        in_block = False
+        block_indent = 0
+        for line in lines:
+            stripped = line.lstrip()
+            indent = len(line) - len(stripped)
+            if stripped.startswith("translate ") and stripped.endswith(":"):
+                in_block = not stripped.endswith(" strings:")
+                block_indent = indent
+                continue
+            if not in_block:
+                continue
+            if stripped and indent <= block_indent:
+                in_block = False
+                continue
+            if stripped.startswith("#"):
+                match = re.search(r'"((?:\\.|[^"])*)"', stripped)
+                if match:
+                    originals.add(match.group(1).replace('\\"', '"').replace("\\'", "'"))
+        return originals
+
+    def _append_static_supplement_entries(
+        self,
+        game_dir: Path,
+        tl_dir: Path,
+        tl_name: str,
+    ) -> int:
+        """把静态漏抽文本写入其首次出现的标准翻译文件。"""
+        candidates = rx.collect_static_source_strings(game_dir)
+        if not candidates:
+            return 0
+
+        existing = self._get_all_originals(tl_dir)
+        added = 0
+        for original, relative_path in candidates.items():
+            if original in existing:
+                continue
+
+            target_file = tl_dir / relative_path
+            # ??????????????????????????????????
+            if original in self._get_file_block_originals(target_file):
+                continue
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            escaped = self._escape_rpy_string(original)
+            with target_file.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    f"\ntranslate {tl_name} strings:\n\n"
+                    "    # RenpyBox: static supplement\n"
+                    f'    old "{escaped}"\n'
+                    f'    new "{escaped}"\n'
+                )
+            existing.add(original)
+            added += 1
+
+        if added:
+            self.logger.info(f"标准补充抽取：已添加 {added} 条静态翻译条目")
+        return added
 
     def _get_all_originals(self, tl_dir: Path) -> Set[str]:
         """获取 tl 目录中所有的原文?
@@ -2056,7 +2125,10 @@ class UnifiedExtractor:
                     next_line = lines[i + 1] if i + 1 < len(lines) else ""
                     new_match = self.NEW_LINE_RE.match(next_line)
 
-                    if old_text in block_originals:
+                    is_static_supplement = bool(
+                        new_lines and new_lines[-1].strip() == "# RenpyBox: static supplement"
+                    )
+                    if old_text in block_originals and not is_static_supplement:
                         removed += 1
                         changed = True
                         # 跳过 old/new 行

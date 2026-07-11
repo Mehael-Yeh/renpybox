@@ -1,4 +1,5 @@
 from module.Renpy.renpy_extract import ExtractFromFile
+from module.Renpy import renpy_extract as rx
 from module.Extract.ReplaceGenerator import (
     _extract_relaxed_english_line_literals,
     _try_load_regex_cache,
@@ -180,3 +181,46 @@ def test_incremental_merge_cleans_staging_folder_and_base_box_placeholders(tmp_p
     assert not staging_dir.exists()
     assert 'old "Back"' not in hud.read_text(encoding="utf-8")
     assert 'old "New menu text"' in (tl_dir / "src" / "plot" / "new_text.rpy").read_text(encoding="utf-8")
+
+
+
+def test_static_supplement_uses_first_source_file_for_duplicate_menu_text(tmp_path):
+    project = tmp_path / "project"
+    first_source = project / "game" / "src" / "chapter01.rpy"
+    second_source = project / "game" / "src" / "chapter02.rpy"
+    first_source.parent.mkdir(parents=True)
+    first_source.write_text(
+        "menu:\n"
+        "    \"Continue route.\"(_choice='continue'):\n"
+        "        pass\n",
+        encoding="utf-8",
+    )
+    second_source.write_text(
+        "menu:\n"
+        "    \"Continue route.\"(_choice='continue'):\n"
+        "        pass\n",
+        encoding="utf-8",
+    )
+
+    candidates = rx.collect_static_source_strings(project)
+    assert candidates["Continue route."] == "src/chapter01.rpy"
+
+    extractor = UnifiedExtractor.__new__(UnifiedExtractor)
+    extractor.logger = types.SimpleNamespace(info=lambda *args, **kwargs: None)
+    tl_dir = project / "_temp" / "game" / "tl" / "chinese"
+    assert extractor._append_static_supplement_entries(project, tl_dir, "chinese") >= 1
+
+    first_tl = tl_dir / "src" / "chapter01.rpy"
+    second_tl = tl_dir / "src" / "chapter02.rpy"
+    assert 'old "Continue route."' in first_tl.read_text(encoding="utf-8")
+    assert not second_tl.exists()
+
+    dialogue_tl = tl_dir / "dialogue.rpy"
+    dialogue_tl.write_text(
+        'translate chinese scene_demo:\n'
+        '    # narrator "Continue route."\n'
+        '    narrator "Existing dialogue"\n',
+        encoding="utf-8",
+    )
+    assert extractor._remove_string_duplicates_with_blocks(tl_dir) == 0
+    assert 'old "Continue route."' in first_tl.read_text(encoding="utf-8")

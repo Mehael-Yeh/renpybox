@@ -21,6 +21,7 @@ from typing import Any, List, Optional, Sequence, Set, Tuple
 from base.Base import Base
 from base.LogManager import LogManager
 from module.Extract.SimpleRpyExtractor import SimpleRpyExtractor
+from module.Renpy import renpy_extract as rx
 from module.Text.SkipRules import should_skip_text
 
 Pair = Tuple[str, str]
@@ -818,6 +819,8 @@ def collect_hook_translation_entries(
 
     logger.info("正在扫描 HOOK 缺失文本...")
     regex_filtered = set(collect_glossary_candidate_texts(target_path, tl_name = tl_name))
+    # 可写入标准 TL 的静态文本必须由增量抽取处理，不能落入 replace_text。
+    regex_filtered -= set(rx.collect_static_source_strings(game_dir).keys())
 
     logger.info("正在读取 tl 已覆盖文本...")
     tl_covered = _get_tl_covered_strings(target_path, tl_name)

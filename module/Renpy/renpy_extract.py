@@ -628,8 +628,9 @@ def is_resource_filename(_string):
     return is_resource_name(_string)
 
 
-def ExtractFromFile(p, is_open_filter, filter_length, is_skip_underline, is_py2, skip_translate_block=False):
-    remove_repeat_for_file(p)
+def ExtractFromFile(p, is_open_filter, filter_length, is_skip_underline, is_py2, skip_translate_block=False, remove_duplicates=True):
+    if remove_duplicates:
+        remove_repeat_for_file(p)
     e = set()
     f = io.open(p, 'r+', encoding='utf-8')
     _read = f.read()
@@ -1024,6 +1025,38 @@ def ExtractWriteFile(p, tl_name, is_open_filter, filter_length, is_gen_empty, gl
     global_e = global_e | extractedSet
     log.info(target + ' extracted success!')
     return global_e
+
+
+def collect_static_source_strings(game_dir, is_open_filter=True, filter_length=4, is_skip_underline=False):
+    """收集可写入 translate strings 的静态源码文本，同文仅保留排序后的首次出现。"""
+    from pathlib import Path
+
+    root = Path(game_dir)
+    source_root = root / "game" if (root / "game").is_dir() else root
+    candidates = {}
+    if not source_root.is_dir():
+        return candidates
+
+    is_py2 = is_python2_from_game_dir(str(source_root))
+    for source_file in sorted(source_root.rglob("*.rpy"), key=lambda item: item.as_posix()):
+        try:
+            relative = source_file.relative_to(source_root)
+        except ValueError:
+            continue
+        if relative.parts and relative.parts[0].lower() == "tl":
+            continue
+        try:
+            # 源码扫描不可调用带写入前处理的旧接口，避免修改游戏原文。
+            texts = ExtractFromFile(
+                str(source_file), is_open_filter, filter_length, is_skip_underline,
+                is_py2, True, False,
+            )
+        except Exception:
+            continue
+        for text in sorted(texts):
+            if text and not should_skip_text(text):
+                candidates.setdefault(text, relative.as_posix())
+    return candidates
 
 
 def ExtractAllFilesInDir(dirName, is_open_filter, filter_length, is_gen_empty, is_skip_underline):
