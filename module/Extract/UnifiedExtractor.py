@@ -2098,65 +2098,10 @@ class UnifiedExtractor:
         return block_originals
 
     def _remove_string_duplicates_with_blocks(self, tl_dir: Path) -> int:
-        """
-        移除 translate strings 中与 translate 块原文重复的条目（优先保留块翻译）。
-        返回删除的条目数量。
-        """
-        block_originals = self._collect_block_originals(tl_dir)
-        if not block_originals:
-            return 0
-
-        removed = 0
-        for rpy_file in self._iter_rpy_files(tl_dir):
-            try:
-                lines = rpy_file.read_text(encoding="utf-8", errors="replace").splitlines()
-            except Exception:
-                continue
-
-            new_lines: List[str] = []
-            i = 0
-            changed = False
-
-            while i < len(lines):
-                line = lines[i]
-                match = self.OLD_LINE_RE.match(line)
-                if match:
-                    old_text = match.group("text").replace('\\"', '"').replace("\\'", "'")
-                    next_line = lines[i + 1] if i + 1 < len(lines) else ""
-                    new_match = self.NEW_LINE_RE.match(next_line)
-
-                    is_static_supplement = bool(
-                        new_lines and new_lines[-1].strip() == "# RenpyBox: static supplement"
-                    )
-                    if old_text in block_originals and not is_static_supplement:
-                        removed += 1
-                        changed = True
-                        # 跳过 old/new 行
-                        i += 2 if new_match else 1
-                        # 跳过紧随其后的空行，避免留下多余空白
-                        while i < len(lines) and not lines[i].strip():
-                            i += 1
-                        continue
-
-                new_lines.append(line)
-                i += 1
-
-            if changed:
-                final_lines: List[str] = []
-                prev_empty = False
-                for entry in new_lines:
-                    is_empty = not entry.strip()
-                    if is_empty and prev_empty:
-                        continue
-                    final_lines.append(entry)
-                    prev_empty = is_empty
-
-                try:
-                    rpy_file.write_text("\n".join(final_lines), encoding="utf-8")
-                except Exception:
-                    pass
-
-        return removed
+        """?? strings ???????????????? old ?????"""
+        del tl_dir
+        # Ren'Py ??? translate ??????? old ??????????????
+        return 0
 
     def _backup_tl_dir(self, game_dir: Path, tl_name: str):
         """备份 tl 目录"""

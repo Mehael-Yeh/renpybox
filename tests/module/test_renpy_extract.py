@@ -198,12 +198,14 @@ def test_static_supplement_uses_first_source_file_for_duplicate_menu_text(tmp_pa
     second_source.write_text(
         "menu:\n"
         "    \"Continue route.\"(_choice='continue'):\n"
-        "        pass\n",
+        "        pass\n"
+        '    narrator "Signal says \\"ready\\"."\n',
         encoding="utf-8",
     )
 
     candidates = rx.collect_static_source_strings(project)
     assert candidates["Continue route."] == "src/chapter01.rpy"
+    assert candidates['Signal says "ready".'] == "src/chapter02.rpy"
 
     extractor = UnifiedExtractor.__new__(UnifiedExtractor)
     extractor.logger = types.SimpleNamespace(info=lambda *args, **kwargs: None)
@@ -213,7 +215,7 @@ def test_static_supplement_uses_first_source_file_for_duplicate_menu_text(tmp_pa
     first_tl = tl_dir / "src" / "chapter01.rpy"
     second_tl = tl_dir / "src" / "chapter02.rpy"
     assert 'old "Continue route."' in first_tl.read_text(encoding="utf-8")
-    assert not second_tl.exists()
+    assert 'old "Continue route."' not in second_tl.read_text(encoding="utf-8")
 
     dialogue_tl = tl_dir / "dialogue.rpy"
     dialogue_tl.write_text(

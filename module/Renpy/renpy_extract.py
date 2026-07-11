@@ -1054,6 +1054,7 @@ def collect_static_source_strings(game_dir, is_open_filter=True, filter_length=4
         except Exception:
             continue
         for text in sorted(texts):
+            text = text.replace('\\"', '"').replace("\\'", "'")
             if text and not should_skip_text(text):
                 candidates.setdefault(text, relative.as_posix())
     return candidates
